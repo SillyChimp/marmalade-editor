@@ -9,8 +9,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.4.1/backbone.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jointjs/3.7.7/joint.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-  <!-- Библиотека ELK для авто-расположения графов -->
+  <!-- Библиотека ELK для авто-расположения графов JointJS -->
   <script src="https://cdn.jsdelivr.net/npm/elkjs@0.8.2/lib/elk.bundled.js"></script>
 
   <style>
@@ -82,7 +81,7 @@
     
     #paper { transform-origin: 0 0; position: relative; }
 
-    /* Рамка выделения с fixed позиционированием */
+    /* Рамка выделения */
     #selection-box { position: fixed; border: 1px dashed #0284c7; background: rgba(2, 132, 199, 0.15); display: none; pointer-events: none; z-index: 1000; }
     
     /* Маркер изменения размера */
@@ -100,18 +99,7 @@
     .panel-title { padding: 10px 12px; font-weight: 700; background: var(--bg-main); border-bottom: 1px solid var(--border-color); font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
     #mermaid-code { height: 220px; padding: 12px; font-family: 'Fira Code', 'Courier New', monospace; font-size: 12px; border: none; border-bottom: 1px solid var(--border-color); resize: vertical; background: #0f172a; color: #38bdf8; outline: none; line-height: 1.5; }
     #mermaid-preview-container { flex: 1; overflow: auto; padding: 16px; background: var(--bg-panel); display: flex; justify-content: center; align-items: flex-start; }
-    
-    .mermaid .node rect, .mermaid .node circle, .mermaid .node polygon { fill: #ECECFF !important; stroke: #9370DB !important; stroke-width: 2px; }
-    .mermaid .node text { fill: #000000 !important; }
-    .mermaid .edgePath .path { stroke: #000000 !important; }
-    .mermaid .marker { fill: #000000 !important; stroke: #000000 !important; }
-    .mermaid .edgeLabel { color: #000000 !important; background-color: #f8fafc !important; }
-
-    body.dark-theme .mermaid .node rect, body.dark-theme .mermaid .node circle, body.dark-theme .mermaid .node polygon { fill: #1e293b !important; stroke: #ffffff !important; }
-    body.dark-theme .mermaid .node text, body.dark-theme .mermaid svg text { fill: #ffffff !important; }
-    body.dark-theme .mermaid .edgePath .path { stroke: #ffffff !important; }
-    body.dark-theme .mermaid .marker { fill: #ffffff !important; stroke: #ffffff !important; }
-    body.dark-theme .mermaid .edgeLabel { color: #ffffff !important; background-color: #0b0f19 !important; }
+    #mermaid-preview { width: 100%; display: flex; justify-content: center; }
 
     .instruction { font-size: 11px; padding: 8px 12px; background: var(--bg-main); border-bottom: 1px solid var(--border-color); color: var(--text-muted); line-height: 1.4; }
     .code-actions { display: flex; gap: 4px; }
@@ -172,16 +160,24 @@
       </div>
       <div class="panel-title">Предпросмотр</div>
       <div id="mermaid-preview-container">
-        <div id="mermaid-preview" class="mermaid"></div>
+        <div id="mermaid-preview"></div>
       </div>
     </div>
   </div>
 
-  <!-- Маркер изменения размера (позиционируется глобально) -->
   <div id="resize-handle"></div>
 
-  <script>
-    // Запрет контекстного меню (системного)
+  <!-- Подключение современного Mermaid v10+ через ES-Модули -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'loose'
+    });
+
+    // Запрет контекстного меню
     document.addEventListener('contextmenu', e => {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
       e.preventDefault();
@@ -190,9 +186,8 @@
     let isDarkTheme = false;
     let currentScale = 1;
     let selectedCells = [];
-    let isSyncing = false; // Флаг для предотвращения зацикливания парсинга
-
-    mermaid.initialize({ startOnLoad: false, theme: 'default' });
+    let isSyncing = false;
+    let renderCounter = 0;
 
     const graph = new joint.dia.Graph();
     
@@ -220,7 +215,7 @@
       width: 3000, height: 3000,
       gridSize: 10, drawGrid: true, background: { color: 'transparent' },
       defaultLink: () => new joint.shapes.standard.Link({
-        router: { name: 'manhattan' }, // Ортогональные стрелки под 90 градусов
+        router: { name: 'manhattan' },
         connector: { name: 'rounded' },
         attrs: {
           line: { stroke: isDarkTheme ? '#ffffff' : '#000000', strokeWidth: 2, targetMarker: { 'type': 'path', 'd': 'M 10 -5 0 0 10 5 Z', fill: isDarkTheme ? '#ffffff' : '#000000', stroke: 'none' } }
@@ -229,7 +224,7 @@
       }),
       snapLinks: { radius: 25 }, linkPinning: false,
       validateConnection: function(S, mS, T, mT) { return S !== T && mT !== undefined; },
-      interactive: { linkMove: false } // Отключаем перемещение всей стрелки, оставляем только точки
+      interactive: { linkMove: false }
     });
 
     function createNode(type, x, y, text = 'Текст') {
@@ -253,12 +248,12 @@
       return element;
     }
 
-    // --- ПАНОРАМИРОВАНИЕ (Правая кнопка) ---
+    // Панорамирование
     const canvasContainer = document.getElementById('canvas-container');
     let isPanning = false, panStartX = 0, panStartY = 0;
 
     canvasContainer.addEventListener('mousedown', function(e) {
-      if (e.button === 2) { // Правая кнопка мыши (где угодно на холсте)
+      if (e.button === 2) {
         isPanning = true;
         panStartX = e.clientX; panStartY = e.clientY;
         canvasContainer.classList.add('panning');
@@ -280,12 +275,12 @@
       }
     });
 
-    // --- ВЫДЕЛЕНИЕ (Левая кнопка на пустом фоне) ---
+    // Выделение рамкой
     let isSelecting = false, selStartX = 0, selStartY = 0;
     const selectionBox = document.getElementById('selection-box');
 
     paper.on('blank:pointerdown', function(evt, x, y) {
-      if (evt.button === 0) { // Только левая кнопка
+      if (evt.button === 0) {
         isSelecting = true;
         selStartX = evt.clientX; selStartY = evt.clientY;
         if (!evt.shiftKey) clearSelection();
@@ -317,7 +312,6 @@
         isSelecting = false;
         selectionBox.style.display = 'none';
         
-        // Математически точный расчет координат с учетом зума и скролла
         const rect = canvasContainer.getBoundingClientRect();
         
         const localX1 = (Math.min(selStartX, e.clientX) - rect.left + canvasContainer.scrollLeft) / currentScale;
@@ -336,7 +330,6 @@
       }
     });
 
-    // --- ВЗАИМОДЕЙСТВИЕ С ЭЛЕМЕНТАМИ ---
     paper.on('cell:pointerdown', function(cellView, evt) {
       if (evt.button !== 0) return;
       const cell = cellView.model;
@@ -352,8 +345,6 @@
         const view = paper.findViewByModel(cell);
         if (view) {
           view.$el.addClass('selected');
-          
-          // Включаем инструменты для стрелок (точки изгиба, сегменты, удаление)
           if (cell.isLink()) {
              const tools = new joint.dia.ToolsView({
                 tools: [
@@ -398,7 +389,6 @@
       }
     });
 
-    // Массовое перемещение
     graph.on('change:position', function(cell, newPos, opt) {
       if (opt.skipMultimove) return;
       if (selectedCells.includes(cell)) {
@@ -411,7 +401,6 @@
       updateResizeHandle();
     });
 
-    // Изменение размера блока
     const resizeHandle = document.getElementById('resize-handle');
     function updateResizeHandle() {
       if (selectedCells.length === 1 && selectedCells[0].isElement()) {
@@ -452,7 +441,6 @@
       document.addEventListener('mouseup', stopResize);
     });
 
-    // Drag and Drop форм
     let draggedType = null;
     document.querySelectorAll('.tool-item').forEach(item => {
       item.addEventListener('dragstart', (e) => { draggedType = e.target.getAttribute('data-type'); e.dataTransfer.setData('text/plain', ''); });
@@ -468,7 +456,6 @@
       draggedType = null;
     });
 
-    // Зум
     function setZoom(scale) {
       currentScale = Math.min(Math.max(0.3, scale), 2.5);
       paper.scale(currentScale, currentScale);
@@ -517,11 +504,10 @@
         link.label(0, { attrs: { text: { fill: tColor } } });
       });
 
-      mermaid.initialize({ startOnLoad: false, theme: isDarkTheme ? 'dark' : 'default' });
+      mermaid.initialize({ startOnLoad: false, theme: isDarkTheme ? 'dark' : 'default', securityLevel: 'loose' });
       updateMermaid();
     }
 
-    // --- АВТОМАТИЧЕСКАЯ СОРТИРОВКА (ELK) ---
     function applyElkLayout() {
       const elk = new ELK();
       
@@ -535,22 +521,21 @@
         id: link.id,
         sources: [link.get('source').id],
         targets: [link.get('target').id]
-      })).filter(e => e.sources[0] && e.targets[0]); // Только с полными связями
+      })).filter(e => e.sources[0] && e.targets[0]);
 
       const graphData = {
         id: "root",
         layoutOptions: {
           'elk.algorithm': 'layered',
-          'elk.direction': 'RIGHT', // Слева направо
-          'elk.spacing.nodeNode': '60', // Отступы между узлами
-          'elk.layered.spacing.nodeNodeBetweenLayers': '70' // Отступы между слоями
+          'elk.direction': 'RIGHT',
+          'elk.spacing.nodeNode': '60',
+          'elk.layered.spacing.nodeNodeBetweenLayers': '70'
         },
         children: nodes,
         edges: edges
       };
 
       elk.layout(graphData).then(result => {
-        // Смещаем весь граф так, чтобы он был по центру (с отступом сверху/слева)
         const offsetX = 100;
         const offsetY = 50;
 
@@ -559,10 +544,7 @@
           if (cell) cell.position(node.x + offsetX, node.y + offsetY);
         });
 
-        // Очищаем изгибы у стрелок, чтобы они натянулись ровно по новым местам
         graph.getLinks().forEach(link => link.vertices([]));
-        
-        // Центрируем скролл на начало графа
         canvasContainer.scrollLeft = 0;
         canvasContainer.scrollTop = 0;
         
@@ -570,14 +552,41 @@
       }).catch(console.error);
     }
 
-    function updateMermaid() {
+    // Отрисовка предпросмотра Mermaid через асинхронный render
+    async function renderMermaidPreview(code) {
+      const previewContainer = document.getElementById('mermaid-preview-container');
+      if (!previewContainer) return;
+
+      try {
+        const renderId = `mermaid-svg-${Date.now()}-${renderCounter++}`;
+        const { svg } = await mermaid.render(renderId, code);
+        previewContainer.innerHTML = `<div id="mermaid-preview" class="mermaid">${svg}</div>`;
+      } catch (e) {
+        console.error('Ошибка рендеринга Mermaid:', e);
+      }
+    }
+
+    // Сохранение конфигураций ELK и заголовочных строк при генерации кода из Canvas
+    async function updateMermaid() {
       if (isSyncing) return;
       isSyncing = true;
 
+      const codeArea = document.getElementById('mermaid-code');
+      const currentCode = codeArea.value.trim();
+      
+      let header = '';
+      if (currentCode) {
+        const lines = currentCode.split('\n');
+        const headerLines = lines.filter(l => l.trim().startsWith('%%') || l.trim().startsWith('flowchart') || l.trim().startsWith('graph'));
+        if (headerLines.length > 0) {
+          header = headerLines.join('\n') + '\n';
+        }
+      }
+
       const elements = graph.getElements();
       const links = graph.getLinks();
-      let code = 'graph TD\n';
-
+      
+      let bodyCode = '';
       elements.forEach(el => {
         const id = el.id.replace(/-/g, '_');
         const text = (el.attr('text/text') || '').replace(/"/g, "'");
@@ -588,7 +597,7 @@
         else if (shape === 'rhombus') nodeStr = `${id}{"${text}"}`;
         else if (shape === 'circle') nodeStr = `${id}(("${text}"))`;
         
-        code += `    ${nodeStr}\n`;
+        bodyCode += `    ${nodeStr}\n`;
       });
 
       links.forEach(link => {
@@ -600,26 +609,34 @@
           const labels = link.labels();
           const linkText = labels.length > 0 && labels[0].attrs.text.text ? labels[0].attrs.text.text : '';
           
-          if (linkText) code += `    ${sId} -- "${linkText}" --> ${tId}\n`;
-          else code += `    ${sId} --> ${tId}\n`;
+          if (linkText) bodyCode += `    ${sId} -- "${linkText}" --> ${tId}\n`;
+          else bodyCode += `    ${sId} --> ${tId}\n`;
         }
       });
 
-      document.getElementById('mermaid-code').value = code;
-      const previewContainer = document.getElementById('mermaid-preview-container');
-      previewContainer.innerHTML = `<div id="mermaid-preview" class="mermaid">${code}</div>`;
-      
-      try { mermaid.contentLoaded(); } catch(e) {}
+      const fullCode = header ? (header + bodyCode) : ('graph TD\n' + bodyCode);
+      codeArea.value = fullCode;
+
+      await renderMermaidPreview(fullCode);
       
       isSyncing = false;
     }
 
-    // --- ПАРСИНГ KОДА С MERMAID В ДИАГРАММУ ---
-    function parseMermaidToGraph(code) {
+    // Безопасный парсинг Mermaid в JointJS Canvas
+    async function parseMermaidToGraph(code) {
       if (isSyncing) return;
       isSyncing = true;
 
       try {
+        // Если код содержит сложный синтаксис (subgraph, директивы ELK), обновляем только Предпросмотр!
+        const isComplex = code.includes('subgraph') || code.includes('%%{init') || code.includes('elk');
+        
+        if (isComplex) {
+          await renderMermaidPreview(code);
+          isSyncing = false;
+          return;
+        }
+
         const lines = code.split('\n');
         const existingElements = {};
         graph.getElements().forEach(el => {
@@ -634,7 +651,6 @@
           let l = line.trim();
           if (!l || l.startsWith('graph') || l.startsWith('flowchart') || l.startsWith('%%')) return;
 
-          // Определение фигур элементов
           const nodeDefs = l.match(/([a-zA-Z0-9_]+)\s*(\(\(\s*"?(.*?)"?\s*\)\)|\{\s*"?(.*?)"?\s*\}|\(\s*"?(.*?)"?\s*\)|\[\s*"?(.*?)"?\s*\])/g);
           if (nodeDefs) {
             nodeDefs.forEach(def => {
@@ -651,7 +667,6 @@
             });
           }
 
-          // Определение связей (стрелок)
           const linkMatch = l.match(/([a-zA-Z0-9_]+)\s*(?:--\s*"?(.*?)"?\s*-->|-->\|(.*?)\|-->|-->)\s*([a-zA-Z0-9_]+)/);
           if (linkMatch) {
             const src = linkMatch[1];
@@ -665,61 +680,54 @@
           }
         });
 
-        if (parsedNodes.size === 0 && parsedLinks.length === 0) {
-          isSyncing = false;
-          return;
+        if (parsedNodes.size > 0 || parsedLinks.length > 0) {
+          graph.clear();
+          const createdNodes = new Map();
+
+          let startX = 100, startY = 100;
+          let idx = 0;
+
+          parsedNodes.forEach((data, id) => {
+            let x = startX + (idx % 4) * 160;
+            let y = startY + Math.floor(idx / 4) * 120;
+
+            if (existingElements[id]) {
+              const pos = existingElements[id].position();
+              x = pos.x;
+              y = pos.y;
+            }
+
+            const node = createNode(data.shape, x, y, data.text);
+            createdNodes.set(id, node);
+            idx++;
+          });
+
+          parsedLinks.forEach(linkData => {
+            const srcNode = createdNodes.get(linkData.source);
+            const tgtNode = createdNodes.get(linkData.target);
+            if (srcNode && tgtNode) {
+              const link = new joint.shapes.standard.Link({
+                source: { id: srcNode.id, port: 'bottom' },
+                target: { id: tgtNode.id, port: 'top' },
+                router: { name: 'manhattan' },
+                connector: { name: 'rounded' },
+                attrs: {
+                  line: {
+                    stroke: isDarkTheme ? '#ffffff' : '#000000',
+                    strokeWidth: 2,
+                    targetMarker: { 'type': 'path', 'd': 'M 10 -5 0 0 10 5 Z', fill: isDarkTheme ? '#ffffff' : '#000000', stroke: 'none' }
+                  }
+                }
+              });
+              if (linkData.text) {
+                link.label(0, { attrs: { text: { text: linkData.text, fill: isDarkTheme ? '#ffffff' : '#000000' } } });
+              }
+              link.addTo(graph);
+            }
+          });
         }
 
-        graph.clear();
-        const createdNodes = new Map();
-
-        let startX = 100, startY = 100;
-        let idx = 0;
-
-        parsedNodes.forEach((data, id) => {
-          let x = startX + (idx % 4) * 160;
-          let y = startY + Math.floor(idx / 4) * 120;
-
-          // Сохраняем позицию, если узел уже существовал
-          if (existingElements[id]) {
-            const pos = existingElements[id].position();
-            x = pos.x;
-            y = pos.y;
-          }
-
-          const node = createNode(data.shape, x, y, data.text);
-          createdNodes.set(id, node);
-          idx++;
-        });
-
-        parsedLinks.forEach(linkData => {
-          const srcNode = createdNodes.get(linkData.source);
-          const tgtNode = createdNodes.get(linkData.target);
-          if (srcNode && tgtNode) {
-            const link = new joint.shapes.standard.Link({
-              source: { id: srcNode.id, port: 'bottom' },
-              target: { id: tgtNode.id, port: 'top' },
-              router: { name: 'manhattan' }, // Стрелки 90 градусов
-              connector: { name: 'rounded' },
-              attrs: {
-                line: {
-                  stroke: isDarkTheme ? '#ffffff' : '#000000',
-                  strokeWidth: 2,
-                  targetMarker: { 'type': 'path', 'd': 'M 10 -5 0 0 10 5 Z', fill: isDarkTheme ? '#ffffff' : '#000000', stroke: 'none' }
-                }
-              }
-            });
-            if (linkData.text) {
-              link.label(0, { attrs: { text: { text: linkData.text, fill: isDarkTheme ? '#ffffff' : '#000000' } } });
-            }
-            link.addTo(graph);
-          }
-        });
-
-        // Обновляем предпросмотр
-        const previewContainer = document.getElementById('mermaid-preview-container');
-        previewContainer.innerHTML = `<div id="mermaid-preview" class="mermaid">${code}</div>`;
-        try { mermaid.contentLoaded(); } catch(e) {}
+        await renderMermaidPreview(code);
 
       } catch(e) {
         console.error('Ошибка парсинга Mermaid:', e);
@@ -755,14 +763,28 @@
       URL.revokeObjectURL(url);
     }
 
-    // Слушатель редактирования кода в текстовом поле
+    // Экспорт функций для HTML обработчиков событий (onclick)
+    window.toggleLeftSidebar = toggleLeftSidebar;
+    window.applyElkLayout = applyElkLayout;
+    window.deleteSelected = deleteSelected;
+    window.zoomIn = zoomIn;
+    window.zoomOut = zoomOut;
+    window.resetZoom = resetZoom;
+    window.toggleTheme = toggleTheme;
+    window.toggleRightSidebar = toggleRightSidebar;
+    window.copyMermaidCode = copyMermaidCode;
+    window.downloadMermaidCode = downloadMermaidCode;
+    window.applyCodeToGraph = applyCodeToGraph;
+    window.graph = graph;
+
+    // Слушатели событий
     document.getElementById('mermaid-code').addEventListener('input', _.debounce(function(e) {
       parseMermaidToGraph(e.target.value);
     }, 600));
 
     graph.on('add change remove', _.debounce(updateMermaid, 200));
 
-    // Стартовый пример
+    // Инициализация стартовой диаграммы
     const n1 = createNode('circle', 200, 80, 'Начало');
     const n2 = createNode('rect', 200, 220, 'Обработка');
     const initialLink = new joint.shapes.standard.Link({
