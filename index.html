@@ -4,14 +4,11 @@
   <meta charset="UTF-8">
   <title>Advanced Mermaid Visual Editor</title>
   
-  <!-- Зависимости JointJS -->
   <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/jointjs/3.7.7/joint.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.4.1/backbone.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jointjs/3.7.7/joint.js"></script>
-  
-  <!-- Зависимость Mermaid -->
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 
   <style>
@@ -20,11 +17,14 @@
       --bg-panel: #ffffff;
       --bg-header: #ffffff;
       --border-color: #d1d5db;
-      --text-color: #1f2937;
+      
+      /* Светлая тема */
+      --text-color: #000000;
       --text-muted: #6b7280;
-      --node-fill: #ffffff;
-      --node-stroke: #0284c7;
-      --node-text: #0f172a;
+      --node-fill: #ECECFF;
+      --node-stroke: #9370DB;
+      --line-color: #000000;
+      
       --canvas-bg: #f8fafc;
       --grid-color: #cbd5e1;
       --selection-color: #ef4444;
@@ -35,11 +35,14 @@
       --bg-panel: #1e293b;
       --bg-header: #0f172a;
       --border-color: #334155;
-      --text-color: #f8fafc;
+      
+      /* Темная тема (Нейтральные цвета) */
+      --text-color: #ffffff;
       --text-muted: #94a3b8;
       --node-fill: #1e293b;
-      --node-stroke: #38bdf8;
-      --node-text: #ffffff;
+      --node-stroke: #ffffff;
+      --line-color: #ffffff;
+      
       --canvas-bg: #0b0f19;
       --grid-color: #1e293b;
       --selection-color: #f87171;
@@ -48,154 +51,103 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; background: var(--bg-main); color: var(--text-color); transition: background 0.2s, color 0.2s; }
 
-    /* Верхняя панель */
-    #top-bar {
-      height: 50px; background: var(--bg-header); border-bottom: 1px solid var(--border-color);
-      display: flex; align-items: center; justify-content: space-between; padding: 0 16px; z-index: 20;
-    }
+    #top-bar { height: 50px; background: var(--bg-header); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; z-index: 20; }
     .bar-group { display: flex; align-items: center; gap: 8px; }
-    .btn {
-      padding: 6px 12px; background: var(--bg-panel); color: var(--text-color);
-      border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;
-      font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; user-select: none;
-    }
-    .btn:hover { border-color: #0284c7; background: rgba(2, 132, 199, 0.08); }
+    .btn { padding: 6px 12px; background: var(--bg-panel); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; user-select: none; }
+    .btn:hover { border-color: var(--node-stroke); }
     .btn-danger { color: #ef4444; border-color: #fca5a5; }
     .btn-danger:hover { background: rgba(239, 68, 68, 0.1); border-color: #ef4444; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: var(--border-color) !important; background: transparent !important; }
     .zoom-text { font-size: 13px; font-weight: 600; width: 48px; text-align: center; }
 
-    /* Рабочая область */
     #main-container { flex: 1; display: flex; position: relative; overflow: hidden; }
 
-    /* Левая панель элементов */
-    #toolbar {
-      width: 220px; background: var(--bg-panel); border-right: 1px solid var(--border-color);
-      display: flex; flex-direction: column; padding: 12px; z-index: 10; transition: margin-left 0.2s ease;
-    }
+    #toolbar { width: 220px; background: var(--bg-panel); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 12px; z-index: 10; transition: margin-left 0.2s ease; }
     #toolbar.collapsed { margin-left: -220px; }
-    .toolbar-header { font-weight: 700; margin-bottom: 12px; color: #0284c7; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; }
-    .tool-item {
-      background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px;
-      padding: 10px; margin-bottom: 10px; cursor: grab; text-align: center; user-select: none; transition: all 0.15s;
-    }
-    .tool-item:hover { border-color: #0284c7; transform: translateY(-1px); }
+    .toolbar-header { font-weight: 700; margin-bottom: 12px; color: var(--text-color); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; }
+    .tool-item { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; margin-bottom: 10px; cursor: grab; text-align: center; user-select: none; transition: all 0.15s; }
+    .tool-item:hover { border-color: var(--node-stroke); transform: translateY(-1px); }
     .tool-desc { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
-    
     .btn-clear { margin-top: auto; padding: 8px; background: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
     .btn-clear:hover { background: #b91c1c; }
 
-    /* Холст */
-    #canvas-container { flex: 1; position: relative; overflow: auto; background: var(--canvas-bg); background-image: radial-gradient(var(--grid-color) 1.2px, transparent 1.2px); background-size: 20px 20px; cursor: grab; }
+    #canvas-container { flex: 1; position: relative; overflow: auto; background: var(--canvas-bg); background-image: radial-gradient(var(--grid-color) 1.2px, transparent 1.2px); background-size: 20px 20px; }
     #canvas-container.panning { cursor: grabbing !important; }
-    #paper { transform-origin: 0 0; }
+    #paper { transform-origin: 0 0; position: relative; }
 
-    /* Показ точек соединения ТОЛЬКО при наведении */
-    .joint-port-body {
-      opacity: 0;
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-    .joint-cell:hover .joint-port-body {
-      opacity: 1;
-    }
+    /* Рамка множественного выделения */
+    #selection-box { position: absolute; border: 1px dashed #0284c7; background: rgba(2, 132, 199, 0.15); display: none; pointer-events: none; z-index: 1000; }
+    
+    /* Маркер изменения размера */
+    #resize-handle { position: absolute; width: 12px; height: 12px; background: #0284c7; border: 2px solid white; cursor: nwse-resize; display: none; z-index: 100; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 
-    /* Выделение элемента */
-    .joint-cell.selected [element-selector="body"] {
-      stroke: var(--selection-color) !important;
-      stroke-width: 3px !important;
-    }
-    .joint-cell.selected [connection="true"] {
-      stroke: var(--selection-color) !important;
-      stroke-width: 3px !important;
-    }
+    .joint-port-body { opacity: 0; transition: opacity 0.2s ease; }
+    .joint-cell:hover .joint-port-body { opacity: 1; }
 
-    /* Правая панель */
-    #sidebar {
-      width: 380px; background: var(--bg-panel); border-left: 1px solid var(--border-color);
-      display: flex; flex-direction: column; z-index: 10; transition: margin-right 0.2s ease;
-    }
+    .joint-cell.selected [element-selector="body"] { stroke: var(--selection-color) !important; stroke-width: 3px !important; }
+    .joint-cell.selected [connection="true"] { stroke: var(--selection-color) !important; stroke-width: 3px !important; }
+
+    #sidebar { width: 380px; background: var(--bg-panel); border-left: 1px solid var(--border-color); display: flex; flex-direction: column; z-index: 10; transition: margin-right 0.2s ease; }
     #sidebar.collapsed { margin-right: -380px; }
     .panel-title { padding: 10px 12px; font-weight: 700; background: var(--bg-main); border-bottom: 1px solid var(--border-color); font-size: 13px; }
-    #mermaid-code { 
-        height: 220px; padding: 12px; font-family: 'Fira Code', 'Courier New', monospace; font-size: 12px; 
-        border: none; border-bottom: 1px solid var(--border-color); resize: vertical; 
-        background: #0f172a; color: #38bdf8; outline: none; line-height: 1.5;
-    }
+    #mermaid-code { height: 220px; padding: 12px; font-family: 'Fira Code', 'Courier New', monospace; font-size: 12px; border: none; border-bottom: 1px solid var(--border-color); resize: vertical; background: #0f172a; color: #38bdf8; outline: none; line-height: 1.5; }
     #mermaid-preview-container { flex: 1; overflow: auto; padding: 16px; background: var(--bg-panel); display: flex; justify-content: center; align-items: flex-start; }
     
-    /* Темная тема для рендера Mermaid */
-    body.dark-theme .mermaid svg text { fill: #f8fafc !important; }
-    body.dark-theme .mermaid .node rect,
-    body.dark-theme .mermaid .node circle,
-    body.dark-theme .mermaid .node polygon { fill: #1e293b !important; stroke: #38bdf8 !important; }
-    body.dark-theme .mermaid .edgePath .path { stroke: #94a3b8 !important; }
-    body.dark-theme .mermaid .marker { fill: #94a3b8 !important; stroke: #94a3b8 !important; }
+    /* Mermaid CSS настройки */
+    .mermaid .node rect, .mermaid .node circle, .mermaid .node polygon { fill: #ECECFF !important; stroke: #9370DB !important; stroke-width: 2px; }
+    .mermaid .node text { fill: #000000 !important; }
+    .mermaid .edgePath .path { stroke: #000000 !important; }
+    .mermaid .marker { fill: #000000 !important; stroke: #000000 !important; }
+    .mermaid .edgeLabel { color: #000000 !important; background-color: #f8fafc !important; }
+
+    body.dark-theme .mermaid .node rect, body.dark-theme .mermaid .node circle, body.dark-theme .mermaid .node polygon { fill: #1e293b !important; stroke: #ffffff !important; }
+    body.dark-theme .mermaid .node text, body.dark-theme .mermaid svg text { fill: #ffffff !important; }
+    body.dark-theme .mermaid .edgePath .path { stroke: #ffffff !important; }
+    body.dark-theme .mermaid .marker { fill: #ffffff !important; stroke: #ffffff !important; }
+    body.dark-theme .mermaid .edgeLabel { color: #ffffff !important; background-color: #0b0f19 !important; }
 
     .instruction { font-size: 11px; padding: 8px 12px; background: var(--bg-main); border-bottom: 1px solid var(--border-color); color: var(--text-muted); line-height: 1.4; }
   </style>
 </head>
 <body>
 
-  <!-- Верхняя панель -->
   <div id="top-bar">
     <div class="bar-group">
-      <button class="btn" onclick="toggleLeftSidebar()" title="Скрыть/показать левое меню">☰ Элементы</button>
-      <button class="btn btn-danger" id="delete-btn" onclick="deleteSelected()" disabled title="Удалить выделенный элемент (Delete)">🗑 Удалить</button>
+      <button class="btn" onclick="toggleLeftSidebar()">☰ Элементы</button>
+      <button class="btn btn-danger" id="delete-btn" onclick="deleteSelected()" disabled>🗑 Удалить</button>
     </div>
-
-    <!-- Управление масштабом -->
     <div class="bar-group">
       <button class="btn" onclick="zoomOut()">−</button>
       <span id="zoom-label" class="zoom-text">100%</span>
       <button class="btn" onclick="zoomIn()">+</button>
       <button class="btn" onclick="resetZoom()">100%</button>
     </div>
-
     <div class="bar-group">
       <button class="btn" onclick="toggleTheme()" id="theme-btn">🌙 Темная тема</button>
-      <button class="btn" onclick="toggleRightSidebar()" title="Скрыть/показать панель кода">Код ☰</button>
+      <button class="btn" onclick="toggleRightSidebar()">Код ☰</button>
     </div>
   </div>
 
   <div id="main-container">
-    <!-- Левая панель -->
     <div id="toolbar">
       <div class="toolbar-header">Фигуры</div>
-      
-      <div class="tool-item" draggable="true" data-type="rect">
-        Прямоугольник
-        <div class="tool-desc">[Обычный узел]</div>
-      </div>
-      
-      <div class="tool-item" draggable="true" data-type="rounded">
-        Скругленный
-        <div class="tool-desc">(Округлый узел)</div>
-      </div>
-      
-      <div class="tool-item" draggable="true" data-type="rhombus">
-        Ромб
-        <div class="tool-desc">{Условие}</div>
-      </div>
-      
-      <div class="tool-item" draggable="true" data-type="circle">
-        Круг
-        <div class="tool-desc">((Начало/Конец))</div>
-      </div>
-
+      <div class="tool-item" draggable="true" data-type="rect">Прямоугольник<div class="tool-desc">[Обычный узел]</div></div>
+      <div class="tool-item" draggable="true" data-type="rounded">Скругленный<div class="tool-desc">(Округлый узел)</div></div>
+      <div class="tool-item" draggable="true" data-type="rhombus">Ромб<div class="tool-desc">{Условие}</div></div>
+      <div class="tool-item" draggable="true" data-type="circle">Круг<div class="tool-desc">((Начало/Конец))</div></div>
       <button class="btn-clear" onclick="graph.clear()">Очистить холст</button>
     </div>
 
-    <!-- Холст -->
     <div id="canvas-container">
       <div id="paper"></div>
+      <div id="selection-box"></div>
     </div>
 
-    <!-- Правая панель -->
     <div id="sidebar">
       <div class="instruction">
-        • <strong>Соединение:</strong> Наведите на фигуру и потяните за появившуюся синюю точку.<br>
-        • <strong>Удаление:</strong> Кликните по элементу/линии и нажмите <code>Delete</code>.<br>
-        • <strong>Перемещение:</strong> Зажмите <code>Space</code> и тащите мышью.
+        • <strong>Правая кнопка:</strong> Перемещение (панорамирование).<br>
+        • <strong>Левая кнопка (на фоне):</strong> Выделение рамкой.<br>
+        • <strong>Изменение размера:</strong> Потяните маркер при выделении 1 блока.
       </div>
       <div class="panel-title">Код Mermaid</div>
       <textarea id="mermaid-code" readonly></textarea>
@@ -206,260 +158,280 @@
     </div>
   </div>
 
+  <!-- Ресайз маркер внутри body для правильного позиционирования -->
+  <div id="resize-handle"></div>
+
   <script>
+    // Запрет контекстного меню для панорамирования правой кнопкой
+    document.addEventListener('contextmenu', e => {
+      if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+      e.preventDefault();
+    });
+
     let isDarkTheme = false;
     let currentScale = 1;
-    let selectedCellView = null;
+    let selectedCells = [];
 
     mermaid.initialize({ startOnLoad: false, theme: 'default' });
 
     const graph = new joint.dia.Graph();
     
-    // Настройка точек соединения (портов)
-    const portGroups = {
-      'connectors': {
-        position: { name: 'perimetric' },
-        attrs: {
-          circle: {
-            r: 6,
-            magnet: true,
-            fill: '#0284c7',
-            stroke: '#ffffff',
-            strokeWidth: 2,
-            cursor: 'crosshair',
-            class: 'joint-port-body'
-          }
-        }
-      }
+    // Ровные настройки портов по центрам граней
+    const getPortConfig = () => {
+      const pColor = isDarkTheme ? '#ffffff' : '#9370DB';
+      const pFill = isDarkTheme ? '#1e293b' : '#ECECFF';
+      return {
+        groups: {
+          'top': { position: { name: 'top' }, attrs: { circle: { r: 6, magnet: true, stroke: pColor, fill: pFill, strokeWidth: 2, cursor: 'crosshair', class: 'joint-port-body' } } },
+          'right': { position: { name: 'right' }, attrs: { circle: { r: 6, magnet: true, stroke: pColor, fill: pFill, strokeWidth: 2, cursor: 'crosshair', class: 'joint-port-body' } } },
+          'bottom': { position: { name: 'bottom' }, attrs: { circle: { r: 6, magnet: true, stroke: pColor, fill: pFill, strokeWidth: 2, cursor: 'crosshair', class: 'joint-port-body' } } },
+          'left': { position: { name: 'left' }, attrs: { circle: { r: 6, magnet: true, stroke: pColor, fill: pFill, strokeWidth: 2, cursor: 'crosshair', class: 'joint-port-body' } } }
+        },
+        items: [
+          { id: 'top', group: 'top' }, { id: 'right', group: 'right' },
+          { id: 'bottom', group: 'bottom' }, { id: 'left', group: 'left' }
+        ]
+      };
     };
 
     const paper = new joint.dia.Paper({
       el: document.getElementById('paper'),
       model: graph,
-      width: 3000,
-      height: 3000,
-      gridSize: 10,
-      drawGrid: true,
-      background: { color: 'transparent' },
-      
+      width: 3000, height: 3000,
+      gridSize: 10, drawGrid: true, background: { color: 'transparent' },
       defaultLink: () => new joint.shapes.standard.Link({
         attrs: {
-          line: {
-            stroke: isDarkTheme ? '#38bdf8' : '#0284c7',
-            strokeWidth: 2,
-            targetMarker: { 'type': 'path', 'd': 'M 10 -5 0 0 10 5 Z' }
-          }
+          line: { stroke: isDarkTheme ? '#ffffff' : '#000000', strokeWidth: 2, targetMarker: { 'type': 'path', 'd': 'M 10 -5 0 0 10 5 Z', fill: isDarkTheme ? '#ffffff' : '#000000', stroke: 'none' } }
         },
-        labels: [{ position: 0.5, attrs: { text: { text: '', fill: isDarkTheme ? '#ffffff' : '#0f172a' } } }]
+        labels: [{ position: 0.5, attrs: { text: { text: '', fill: isDarkTheme ? '#ffffff' : '#000000' } } }]
       }),
-      
-      snapLinks: { radius: 25 },
-      linkPinning: false,
-      validateConnection: function(cellViewS, magnetS, cellViewT, magnetT) {
-        if (cellViewS === cellViewT) return false;
-        return magnetT !== undefined;
-      }
+      snapLinks: { radius: 25 }, linkPinning: false,
+      validateConnection: function(S, mS, T, mT) { return S !== T && mT !== undefined; }
     });
 
-    // 1. Создание элементов
     function createNode(type, x, y, text = 'Текст') {
       let element;
+      const bColor = isDarkTheme ? '#1e293b' : '#ECECFF';
+      const sColor = isDarkTheme ? '#ffffff' : '#9370DB';
+      const tColor = isDarkTheme ? '#ffffff' : '#000000';
 
-      const bodyAttrs = {
-        fill: isDarkTheme ? '#1e293b' : '#ffffff',
-        stroke: isDarkTheme ? '#38bdf8' : '#0284c7',
-        strokeWidth: 2
-      };
-
-      const textAttrs = {
-        text: text,
-        fill: isDarkTheme ? '#ffffff' : '#0f172a',
-        fontSize: 13,
-        fontWeight: '600'
-      };
+      const bodyAttrs = { fill: bColor, stroke: sColor, strokeWidth: 2 };
+      const textAttrs = { text: text, fill: tColor, fontSize: 13, fontWeight: '600' };
 
       switch(type) {
-        case 'rect':
-          element = new joint.shapes.standard.Rectangle();
-          element.resize(110, 45);
-          break;
-        case 'rounded':
-          element = new joint.shapes.standard.Rectangle();
-          element.resize(110, 45);
-          bodyAttrs.rx = 12; bodyAttrs.ry = 12;
-          break;
-        case 'rhombus':
-          element = new joint.shapes.standard.Polygon();
-          element.resize(80, 80);
-          bodyAttrs.refPoints = '0,10 10,0 20,10 10,20';
-          break;
-        case 'circle':
-          element = new joint.shapes.standard.Circle();
-          element.resize(60, 60);
-          break;
+        case 'rect': element = new joint.shapes.standard.Rectangle(); element.resize(110, 45); break;
+        case 'rounded': element = new joint.shapes.standard.Rectangle(); element.resize(110, 45); bodyAttrs.rx = 12; bodyAttrs.ry = 12; break;
+        case 'rhombus': element = new joint.shapes.standard.Polygon(); element.resize(80, 80); bodyAttrs.refPoints = '0,10 10,0 20,10 10,20'; break;
+        case 'circle': element = new joint.shapes.standard.Circle(); element.resize(60, 60); break;
       }
-
-      element.position(x, y);
-      element.attr({ body: bodyAttrs, text: textAttrs });
-      element.set('mermaidShape', type);
-
-      element.prop('ports', {
-        groups: portGroups,
-        items: [
-          { id: 'top', group: 'connectors', args: { dx: 0, dy: -20 } },
-          { id: 'right', group: 'connectors', args: { dx: 20, dy: 0 } },
-          { id: 'bottom', group: 'connectors', args: { dx: 0, dy: 20 } },
-          { id: 'left', group: 'connectors', args: { dx: -20, dy: 0 } }
-        ]
-      });
-
+      element.position(x, y).attr({ body: bodyAttrs, text: textAttrs }).set('mermaidShape', type);
+      element.prop('ports', getPortConfig());
       element.addTo(graph);
       return element;
     }
 
-    // 2. Выделение элементов и удаление
-    paper.on('cell:pointerclick', function(cellView) {
-      clearSelection();
-      selectedCellView = cellView;
-      selectedCellView.$el.addClass('selected');
-      document.getElementById('delete-btn').removeAttribute('disabled');
+    // МНОЖЕСТВЕННОЕ ВЫДЕЛЕНИЕ И ПАНОРАМИРОВАНИЕ
+    let isSelecting = false, isPanning = false;
+    let startX = 0, startY = 0;
+    const selectionBox = document.getElementById('selection-box');
+    const canvasContainer = document.getElementById('canvas-container');
+
+    paper.on('blank:pointerdown', function(evt, x, y) {
+      if (evt.button === 0) { // Левая кнопка - рамка выделения
+        isSelecting = true;
+        startX = evt.clientX; startY = evt.clientY;
+        if (!evt.shiftKey) clearSelection();
+        
+        selectionBox.style.left = startX + 'px';
+        selectionBox.style.top = startY + 'px';
+        selectionBox.style.width = '0px';
+        selectionBox.style.height = '0px';
+        selectionBox.style.display = 'block';
+      } else if (evt.button === 2) { // Правая кнопка - панорамирование
+        isPanning = true;
+        startX = evt.clientX; startY = evt.clientY;
+        canvasContainer.classList.add('panning');
+      }
     });
 
-    paper.on('blank:pointerclick', function() {
-      clearSelection();
+    $(document).on('mousemove', function(evt) {
+      if (isSelecting) {
+        const left = Math.min(startX, evt.clientX);
+        const top = Math.min(startY, evt.clientY);
+        const width = Math.abs(evt.clientX - startX);
+        const height = Math.abs(evt.clientY - startY);
+        
+        // Позиция рамки относительно страницы
+        selectionBox.style.left = left + 'px';
+        selectionBox.style.top = top + 'px';
+        selectionBox.style.width = width + 'px';
+        selectionBox.style.height = height + 'px';
+      }
+      
+      if (isPanning && evt.buttons === 2) {
+        canvasContainer.scrollLeft -= (evt.clientX - startX);
+        canvasContainer.scrollTop -= (evt.clientY - startY);
+        startX = evt.clientX; startY = evt.clientY;
+      }
     });
+
+    $(document).on('mouseup', function(evt) {
+      if (isSelecting) {
+        isSelecting = false;
+        selectionBox.style.display = 'none';
+        
+        // Преобразование координат для JointJS
+        const rect = canvasContainer.getBoundingClientRect();
+        const left = Math.min(startX, evt.clientX) - rect.left + canvasContainer.scrollLeft;
+        const top = Math.min(startY, evt.clientY) - rect.top + canvasContainer.scrollTop;
+        const width = Math.abs(evt.clientX - startX);
+        const height = Math.abs(evt.clientY - startY);
+        
+        const localRect = paper.clientToLocalRect({ x: left, y: top, width: width, height: height });
+        const elements = graph.findModelsInArea(localRect);
+        elements.forEach(addToSelection);
+      }
+      if (isPanning) {
+        isPanning = false;
+        canvasContainer.classList.remove('panning');
+      }
+    });
+
+    function addToSelection(cell) {
+      if (!selectedCells.includes(cell)) {
+        selectedCells.push(cell);
+        const view = paper.findViewByModel(cell);
+        if (view) view.$el.addClass('selected');
+      }
+      updateResizeHandle();
+      document.getElementById('delete-btn').removeAttribute('disabled');
+    }
 
     function clearSelection() {
-      if (selectedCellView) {
-        selectedCellView.$el.removeClass('selected');
-        selectedCellView = null;
-      }
+      selectedCells.forEach(cell => {
+        const view = paper.findViewByModel(cell);
+        if (view) view.$el.removeClass('selected');
+      });
+      selectedCells = [];
+      updateResizeHandle();
       document.getElementById('delete-btn').setAttribute('disabled', 'true');
     }
 
-    function deleteSelected() {
-      if (selectedCellView) {
-        selectedCellView.model.remove();
-        clearSelection();
-        updateMermaid();
+    paper.on('cell:pointerdown', function(cellView, evt) {
+      if (evt.button !== 0) return;
+      const cell = cellView.model;
+      if (!selectedCells.includes(cell)) {
+        if (!evt.shiftKey) clearSelection();
+        addToSelection(cell);
       }
+    });
+
+    function deleteSelected() {
+      selectedCells.forEach(cell => cell.remove());
+      clearSelection();
+      updateMermaid();
     }
 
-    // Горячая клавиша Delete / Backspace
     $(document).on('keydown', function(e) {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCellView) {
-        // Не удаляем, если пользователь пишет текст в prompt или input
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCells.length > 0) {
         if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
         deleteSelected();
       }
     });
 
-    // 3. Drag and Drop с левой панели
-    const canvasContainer = document.getElementById('canvas-container');
-    let draggedType = null;
-
-    document.querySelectorAll('.tool-item').forEach(item => {
-      item.addEventListener('dragstart', (e) => {
-        draggedType = e.target.getAttribute('data-type');
-        e.dataTransfer.setData('text/plain', '');
-      });
+    // Массовое перемещение
+    graph.on('change:position', function(cell, newPos, opt) {
+      if (opt.skipMultimove) return;
+      if (selectedCells.includes(cell)) {
+        const dx = newPos.x - cell.previous('position').x;
+        const dy = newPos.y - cell.previous('position').y;
+        selectedCells.forEach(sel => {
+          if (sel !== cell && sel.isElement()) sel.translate(dx, dy, { skipMultimove: true });
+        });
+      }
+      updateResizeHandle();
     });
 
-    canvasContainer.addEventListener('dragover', (e) => e.preventDefault());
+    // ИЗМЕНЕНИЕ РАЗМЕРА БЛОКА (Resize)
+    const resizeHandle = document.getElementById('resize-handle');
+    let isResizing = false;
 
+    function updateResizeHandle() {
+      if (selectedCells.length === 1 && selectedCells[0].isElement()) {
+        const cell = selectedCells[0];
+        const bbox = cell.getBBox();
+        const paperBBox = paper.localToPaperRect(bbox);
+        const rect = canvasContainer.getBoundingClientRect();
+        
+        resizeHandle.style.left = (rect.left + paperBBox.x + paperBBox.width - canvasContainer.scrollLeft - 6) + 'px';
+        resizeHandle.style.top = (rect.top + paperBBox.y + paperBBox.height - canvasContainer.scrollTop - 6) + 'px';
+        resizeHandle.style.display = 'block';
+      } else {
+        resizeHandle.style.display = 'none';
+      }
+    }
+
+    graph.on('change:size', updateResizeHandle);
+    paper.on('scale translate', updateResizeHandle);
+    canvasContainer.addEventListener('scroll', updateResizeHandle);
+
+    resizeHandle.addEventListener('mousedown', function(evt) {
+      evt.stopPropagation();
+      isResizing = true;
+      const startX = evt.clientX, startY = evt.clientY;
+      const cell = selectedCells[0];
+      const startSize = cell.size();
+
+      function doResize(e) {
+        const dx = (e.clientX - startX) / currentScale;
+        const dy = (e.clientY - startY) / currentScale;
+        cell.resize(Math.max(40, startSize.width + dx), Math.max(30, startSize.height + dy));
+        updateMermaid();
+      }
+      function stopResize() {
+        document.removeEventListener('mousemove', doResize);
+        document.removeEventListener('mouseup', stopResize);
+        isResizing = false;
+      }
+      document.addEventListener('mousemove', doResize);
+      document.addEventListener('mouseup', stopResize);
+    });
+
+    // Drag and Drop форм
+    let draggedType = null;
+    document.querySelectorAll('.tool-item').forEach(item => {
+      item.addEventListener('dragstart', (e) => { draggedType = e.target.getAttribute('data-type'); e.dataTransfer.setData('text/plain', ''); });
+    });
+    canvasContainer.addEventListener('dragover', (e) => e.preventDefault());
     canvasContainer.addEventListener('drop', (e) => {
       e.preventDefault();
       if (!draggedType) return;
-      
       const rect = canvasContainer.getBoundingClientRect();
       const x = (e.clientX - rect.left + canvasContainer.scrollLeft) / currentScale - 50;
       const y = (e.clientY - rect.top + canvasContainer.scrollTop) / currentScale - 20;
-      
       createNode(draggedType, x, y);
       draggedType = null;
     });
 
-    // 4. Навигация по холсту (Панорамирование)
-    let isPanning = false;
-    let isSpacePressed = false;
-    let startX = 0, startY = 0;
-
-    $(document).on('keydown', function(e) {
-      if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-        isSpacePressed = true;
-        canvasContainer.classList.add('panning');
-      }
-    });
-
-    $(document).on('keyup', function(e) {
-      if (e.code === 'Space') {
-        isSpacePressed = false;
-        canvasContainer.classList.remove('panning');
-      }
-    });
-
-    paper.on('blank:pointerdown', function(evt) {
-      isPanning = true;
-      startX = evt.clientX;
-      startY = evt.clientY;
-      canvasContainer.classList.add('panning');
-    });
-
-    $(document).on('mousemove', function(evt) {
-      if (isPanning || isSpacePressed) {
-        if (evt.buttons === 1) {
-          canvasContainer.scrollLeft -= (evt.clientX - startX);
-          canvasContainer.scrollTop -= (evt.clientY - startY);
-          startX = evt.clientX;
-          startY = evt.clientY;
-        }
-      }
-    });
-
-    $(document).on('mouseup', function() { 
-      isPanning = false; 
-      if (!isSpacePressed) canvasContainer.classList.remove('panning');
-    });
-
-    // 5. Масштабирование
     function setZoom(scale) {
       currentScale = Math.min(Math.max(0.3, scale), 2.5);
       paper.scale(currentScale, currentScale);
       document.getElementById('zoom-label').innerText = `${Math.round(currentScale * 100)}%`;
+      updateResizeHandle();
     }
-
     function zoomIn() { setZoom(currentScale + 0.15); }
     function zoomOut() { setZoom(currentScale - 0.15); }
     function resetZoom() { setZoom(1); }
+    canvasContainer.addEventListener('wheel', function(e) { if (e.ctrlKey) { e.preventDefault(); if (e.deltaY < 0) zoomIn(); else zoomOut(); } }, { passive: false });
 
-    canvasContainer.addEventListener('wheel', function(e) {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        if (e.deltaY < 0) zoomIn();
-        else zoomOut();
-      }
-    }, { passive: false });
-
-    // 6. Редактирование текста двойным кликом
     paper.on('cell:pointerdblclick', function(cellView) {
       const cell = cellView.model;
       const isLink = cell.isLink();
-      
-      let currentText = '';
-      if (isLink) {
-        const labels = cell.labels();
-        currentText = labels.length > 0 ? labels[0].attrs.text.text : '';
-      } else {
-        currentText = cell.attr('text/text');
-      }
-
+      let currentText = isLink ? (cell.labels().length > 0 ? cell.labels()[0].attrs.text.text : '') : cell.attr('text/text');
       const newText = prompt('Введите текст:', currentText);
       if (newText !== null) {
-        if (isLink) {
-          cell.label(0, { attrs: { text: { text: newText } } });
-        } else {
-          cell.attr('text/text', newText);
-        }
+        if (isLink) cell.label(0, { attrs: { text: { text: newText } } });
+        else cell.attr('text/text', newText);
         updateMermaid();
       }
     });
@@ -467,36 +439,34 @@
     function toggleLeftSidebar() { document.getElementById('toolbar').classList.toggle('collapsed'); }
     function toggleRightSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
 
-    // 7. Переключение темной темы
     function toggleTheme() {
       isDarkTheme = !isDarkTheme;
       document.body.classList.toggle('dark-theme', isDarkTheme);
       document.getElementById('theme-btn').innerText = isDarkTheme ? '☀️ Светлая тема' : '🌙 Темная тема';
 
+      const sColor = isDarkTheme ? '#ffffff' : '#9370DB';
+      const bColor = isDarkTheme ? '#1e293b' : '#ECECFF';
+      const tColor = isDarkTheme ? '#ffffff' : '#000000';
+      const lColor = isDarkTheme ? '#ffffff' : '#000000';
+
       graph.getElements().forEach(el => {
-        el.attr({
-          body: {
-            fill: isDarkTheme ? '#1e293b' : '#ffffff',
-            stroke: isDarkTheme ? '#38bdf8' : '#0284c7'
-          },
-          text: { fill: isDarkTheme ? '#ffffff' : '#0f172a' }
-        });
+        el.attr({ body: { fill: bColor, stroke: sColor }, text: { fill: tColor } });
+        el.prop('ports', getPortConfig());
       });
 
       graph.getLinks().forEach(link => {
-        link.attr('line/stroke', isDarkTheme ? '#38bdf8' : '#0284c7');
-        link.label(0, { attrs: { text: { fill: isDarkTheme ? '#ffffff' : '#0f172a' } } });
+        link.attr('line/stroke', lColor);
+        link.attr('line/targetMarker/fill', lColor);
+        link.label(0, { attrs: { text: { fill: tColor } } });
       });
 
       mermaid.initialize({ startOnLoad: false, theme: isDarkTheme ? 'dark' : 'default' });
       updateMermaid();
     }
 
-    // 8. Генерация кода Mermaid
     function updateMermaid() {
       const elements = graph.getElements();
       const links = graph.getLinks();
-      
       let code = 'graph TD\n';
 
       elements.forEach(el => {
@@ -515,11 +485,9 @@
       links.forEach(link => {
         const sourceId = link.get('source').id;
         const targetId = link.get('target').id;
-        
         if (sourceId && targetId) {
           const sId = sourceId.replace(/-/g, '_');
           const tId = targetId.replace(/-/g, '_');
-          
           const labels = link.labels();
           const linkText = labels.length > 0 && labels[0].attrs.text.text ? labels[0].attrs.text.text : '';
           
@@ -529,27 +497,18 @@
       });
 
       document.getElementById('mermaid-code').value = code;
-      
       const previewContainer = document.getElementById('mermaid-preview-container');
       previewContainer.innerHTML = `<div id="mermaid-preview" class="mermaid">${code}</div>`;
       
-      try {
-        mermaid.contentLoaded();
-      } catch(e) {
-        console.warn("Mermaid update...", e);
-      }
+      try { mermaid.contentLoaded(); } catch(e) {}
     }
 
     graph.on('add change remove', _.debounce(updateMermaid, 200));
 
-    // Стартовые узлы
-    const n1 = createNode('circle', 120, 80, 'Начало');
-    const n2 = createNode('rect', 120, 200, 'Обработка');
-    
-    const initialLink = new joint.shapes.standard.Link({
-      source: { id: n1.id, port: 'bottom' },
-      target: { id: n2.id, port: 'top' }
-    });
+    // Стартовый пример
+    const n1 = createNode('circle', 150, 80, 'Начало');
+    const n2 = createNode('rect', 150, 220, 'Обработка');
+    const initialLink = new joint.shapes.standard.Link({ source: { id: n1.id, port: 'bottom' }, target: { id: n2.id, port: 'top' } });
     initialLink.addTo(graph);
 
   </script>
