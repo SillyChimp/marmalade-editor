@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <title>Advanced Mermaid Visual Editor</title>
-  <!-- Зависимости JointJS (для визуального редактора) -->
+  
+  <!-- Зависимости JointJS -->
   <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/jointjs/3.7.7/joint.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.4.1/backbone.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jointjs/3.7.7/joint.js"></script>
   
-  <!-- Зависимость Mermaid (для кода) -->
+  <!-- Зависимость Mermaid -->
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 
   <style>
@@ -26,10 +27,279 @@
       text-align: center; user-select: none; transition: background 0.2s;
     }
     .tool-item:hover { background: #e0f0ff; border-color: #0066cc; }
-    .tool-item svg { pointer-events: none; margin-bottom: 5px;}
+    .tool-desc { font-size: 12px; color: #666; margin-top: 4px; }
+    
+    .btn-clear { margin-top: auto; padding: 10px; background: #cc0000; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    .btn-clear:hover { background: #990000; }
 
     /* Холст (центр) */
     #canvas-container { flex: 1; position: relative; overflow: auto; background: #fafafa; background-image: radial-gradient(#ddd 1px, transparent 1px); background-size: 20px 20px;}
-    #paper { cursor: crosshair; }
+    #paper { cursor: default; }
 
-    /* Панель Mermaid (справа)
+    /* Панель Mermaid (справа) */
+    #sidebar { width: 400px; display: flex; flex-direction: column; background: #fff; border-left: 1px solid #ddd; z-index: 10; }
+    .panel-title { padding: 12px; font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #ddd; font-size: 14px; }
+    #mermaid-code { 
+        height: 250px; padding: 10px; font-family: monospace; font-size: 13px; 
+        border: none; border-bottom: 1px solid #ddd; resize: vertical; 
+        background: #282c34; color: #abb2bf;
+    }
+    #mermaid-preview-container { flex: 1; overflow: auto; padding: 10px; background: #fff; display: flex; justify-content: center; align-items: flex-start; }
+    
+    /* Инструкция */
+    .instruction { font-size: 12px; padding: 10px; background: #e9ecef; border-bottom: 1px solid #ddd; }
+  </style>
+</head>
+<body>
+
+  <!-- Левая панель: Формы -->
+  <div id="toolbar">
+    <div class="toolbar-header">Элементы</div>
+    
+    <div class="tool-item" draggable="true" data-type="rect">
+      Прямоугольник
+      <div class="tool-desc">[Обычный узел]</div>
+    </div>
+    
+    <div class="tool-item" draggable="true" data-type="rounded">
+      Скругленный
+      <div class="tool-desc">(Округлый узел)</div>
+    </div>
+    
+    <div class="tool-item" draggable="true" data-type="rhombus">
+      Ромб
+      <div class="tool-desc">{Условие}</div>
+    </div>
+    
+    <div class="tool-item" draggable="true" data-type="circle">
+      Круг
+      <div class="tool-desc">((Начало/Конец))</div>
+    </div>
+
+    <button class="btn-clear" onclick="graph.clear()">Очистить холст</button>
+  </div>
+
+  <!-- Центральная панель: Холст -->
+  <div id="canvas-container">
+    <div id="paper"></div>
+  </div>
+
+  <!-- Правая панель: Код -->
+  <div id="sidebar">
+    <div class="instruction">
+      <strong>Как использовать:</strong><br>
+      1. Перетащите элементы слева на холст.<br>
+      2. Тяните за маленькие синие точки на узлах, чтобы создать связь.<br>
+      3. Двойной клик по тексту узла или связи, чтобы изменить его.
+    </div>
+    <div class="panel-title">Код Mermaid (graph TD)</div>
+    <textarea id="mermaid-code" readonly></textarea>
+    <div class="panel-title">Mermaid Render (Проверка)</div>
+    <div id="mermaid-preview-container">
+      <div id="mermaid-preview" class="mermaid"></div>
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({ startOnLoad: false, theme: 'default' });
+
+    // 1. Инициализация JointJS (Граф и Холст)
+    const graph = new joint.dia.Graph();
+    
+    const paper = new joint.dia.Paper({
+      el: document.getElementById('paper'),
+      model: graph,
+      width: 2000,
+      height: 2000,
+      gridSize: 10,
+      drawGrid: true,
+      background: { color: 'transparent' },
+      
+      // Настройки соединений
+      defaultLink: new joint.shapes.standard.Link({
+        attrs: {
+          line: { stroke: '#333', strokeWidth: 2, targetMarker: { 'type': 'path', 'd': 'M 10 -5 0 0 10 5 Z' } }
+        },
+        labels: [{ position: 0.5, attrs: { text: { text: '' } } }]
+      }),
+      linkPinning: false, // Связи должны быть привязаны к элементам
+      defaultConnectionPoint: { name: 'boundary' },
+      validateConnection: function(cellViewS, magnetS, cellViewT, magnetT, end, linkView) {
+        if (cellViewS === cellViewT) return false; // Нельзя связывать элемент сам с собой
+        return magnetT !== undefined; // Можно связывать только с элементами
+      },
+      
+      // Включаем "магниты" (точки для соединений)
+      interactive: { linkMove: true, elementMove: true }
+    });
+
+    // 2. Фабрика создания элементов
+    function createNode(type, x, y) {
+      let element;
+      const text = 'Текст';
+      
+      // Базовые стили узла
+      const baseAttrs = {
+        body: { fill: '#ffffff', stroke: '#0066cc', strokeWidth: 2 },
+        text: { text: text, fill: '#333', fontSize: 14, fontWeight: 'bold' }
+      };
+
+      // Магниты (порты для связей)
+      const portAttrs = {
+        magnet: true,
+        fill: '#0066cc',
+        r: 5,
+        opacity: 0.3 // Скрыты, пока не наведешь мышь (настраивается в CSS/JS)
+      };
+
+      switch(type) {
+        case 'rect':
+          element = new joint.shapes.standard.Rectangle();
+          element.resize(100, 40);
+          baseAttrs.body.rx = 0; baseAttrs.body.ry = 0;
+          break;
+        case 'rounded':
+          element = new joint.shapes.standard.Rectangle();
+          element.resize(100, 40);
+          baseAttrs.body.rx = 10; baseAttrs.body.ry = 10;
+          break;
+        case 'rhombus':
+          element = new joint.shapes.standard.Polygon();
+          element.resize(80, 80);
+          baseAttrs.body.refPoints = '0,10 10,0 20,10 10,20';
+          break;
+        case 'circle':
+          element = new joint.shapes.standard.Circle();
+          element.resize(60, 60);
+          break;
+      }
+
+      element.position(x, y);
+      element.attr(baseAttrs);
+      
+      // Добавляем атрибут для типа формы, чтобы знать, как рендерить в Mermaid
+      element.set('mermaidShape', type);
+      element.addTo(graph);
+      return element;
+    }
+
+    // 3. Drag and Drop с панели инструментов
+    const canvasContainer = document.getElementById('canvas-container');
+    let draggedType = null;
+
+    document.querySelectorAll('.tool-item').forEach(item => {
+      item.addEventListener('dragstart', (e) => {
+        draggedType = e.target.getAttribute('data-type');
+        e.dataTransfer.setData('text/plain', ''); // Firefox fix
+      });
+    });
+
+    canvasContainer.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+
+    canvasContainer.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (!draggedType) return;
+      
+      const rect = canvasContainer.getBoundingClientRect();
+      const x = e.clientX - rect.left + canvasContainer.scrollLeft - 50;
+      const y = e.clientY - rect.top + canvasContainer.scrollTop - 20;
+      
+      createNode(draggedType, x, y);
+      draggedType = null;
+    });
+
+    // 4. Редактирование текста двойным кликом
+    paper.on('cell:pointerdblclick', function(cellView, e) {
+      const cell = cellView.model;
+      const isLink = cell.isLink();
+      
+      let currentText = '';
+      if (isLink) {
+        const labels = cell.labels();
+        currentText = labels.length > 0 ? labels[0].attrs.text.text : '';
+      } else {
+        currentText = cell.attr('text/text');
+      }
+
+      const newText = prompt('Введите текст:', currentText);
+      if (newText !== null) {
+        if (isLink) {
+          cell.label(0, { attrs: { text: { text: newText } } });
+        } else {
+          cell.attr('text/text', newText);
+        }
+      }
+    });
+
+    // 5. Генерация Mermaid кода
+    function updateMermaid() {
+      const elements = graph.getElements();
+      const links = graph.getLinks();
+      
+      let code = 'graph TD\n';
+
+      // 5.1 Генерация узлов
+      elements.forEach(el => {
+        const id = el.id.replace(/-/g, '_'); // Mermaid не любит дефисы
+        const text = el.attr('text/text').replace(/"/g, "'");
+        const shape = el.get('mermaidShape');
+        
+        let mermaidNode = '';
+        if (shape === 'rect') mermaidNode = `${id}["${text}"]`;
+        else if (shape === 'rounded') mermaidNode = `${id}("${text}")`;
+        else if (shape === 'rhombus') mermaidNode = `${id}{"${text}"}`;
+        else if (shape === 'circle') mermaidNode = `${id}(("${text}"))`;
+        
+        code += `    ${mermaidNode}\n`;
+      });
+
+      // 5.2 Генерация связей
+      links.forEach(link => {
+        const sourceId = link.get('source').id;
+        const targetId = link.get('target').id;
+        
+        if (sourceId && targetId) { // Если связь завершена
+          const sId = sourceId.replace(/-/g, '_');
+          const tId = targetId.replace(/-/g, '_');
+          
+          const labels = link.labels();
+          const linkText = labels.length > 0 && labels[0].attrs.text.text ? labels[0].attrs.text.text : '';
+          
+          if (linkText) {
+            code += `    ${sId} -- "${linkText}" --> ${tId}\n`;
+          } else {
+            code += `    ${sId} --> ${tId}\n`;
+          }
+        }
+      });
+
+      // 5.3 Вывод и рендер
+      document.getElementById('mermaid-code').value = code;
+      
+      const previewContainer = document.getElementById('mermaid-preview-container');
+      previewContainer.innerHTML = '<div id="mermaid-preview" class="mermaid">' + code + '</div>';
+      
+      try {
+        mermaid.contentLoaded();
+      } catch(e) {
+        console.warn("Ошибка рендера Mermaid (возможно граф пуст или неполный):", e);
+      }
+    }
+
+    // Слушаем изменения в графе
+    graph.on('add change remove', _.debounce(updateMermaid, 300));
+
+    // Добавляем тестовые узлы при загрузке
+    const n1 = createNode('circle', 100, 50);
+    n1.attr('text/text', 'Начало');
+    const n2 = createNode('rect', 100, 150);
+    n2.attr('text/text', 'Действие');
+    
+    const l1 = new joint.shapes.standard.Link({ source: { id: n1.id }, target: { id: n2.id } });
+    l1.addTo(graph);
+
+  </script>
+</body>
+</html>
