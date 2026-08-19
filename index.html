@@ -97,7 +97,7 @@
 
     #sidebar { width: 380px; background: var(--bg-panel); border-left: 1px solid var(--border-color); display: flex; flex-direction: column; z-index: 10; transition: margin-right 0.2s ease; }
     #sidebar.collapsed { margin-right: -380px; }
-    .panel-title { padding: 10px 12px; font-weight: 700; background: var(--bg-main); border-bottom: 1px solid var(--border-color); font-size: 13px; }
+    .panel-title { padding: 10px 12px; font-weight: 700; background: var(--bg-main); border-bottom: 1px solid var(--border-color); font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
     #mermaid-code { height: 220px; padding: 12px; font-family: 'Fira Code', 'Courier New', monospace; font-size: 12px; border: none; border-bottom: 1px solid var(--border-color); resize: vertical; background: #0f172a; color: #38bdf8; outline: none; line-height: 1.5; }
     #mermaid-preview-container { flex: 1; overflow: auto; padding: 16px; background: var(--bg-panel); display: flex; justify-content: center; align-items: flex-start; }
     
@@ -114,6 +114,8 @@
     body.dark-theme .mermaid .edgeLabel { color: #ffffff !important; background-color: #0b0f19 !important; }
 
     .instruction { font-size: 11px; padding: 8px 12px; background: var(--bg-main); border-bottom: 1px solid var(--border-color); color: var(--text-muted); line-height: 1.4; }
+    .code-actions { display: flex; gap: 4px; }
+    .code-actions .btn { padding: 3px 8px; font-size: 11px; }
   </style>
 </head>
 <body>
@@ -157,8 +159,17 @@
         • <strong>Левая кнопка:</strong> Выделение рамкой (на фоне).<br>
         • <strong>Стрелки:</strong> Кликните для редактирования изгибов.
       </div>
-      <div class="panel-title">Код Mermaid</div>
-      <textarea id="mermaid-code" readonly></textarea>
+      <div class="panel-title">
+        <span>Код Mermaid</span>
+        <div class="code-actions">
+          <button class="btn" onclick="copyMermaidCode()">📋 Копировать</button>
+          <button class="btn" onclick="downloadMermaidCode()">💾 Скачать</button>
+        </div>
+      </div>
+      <textarea id="mermaid-code" placeholder="Введите или отредактируйте код Mermaid..."></textarea>
+      <div style="padding: 6px 12px; background: var(--bg-panel); border-bottom: 1px solid var(--border-color);">
+        <button class="btn btn-action" style="width: 100%; justify-content: center;" onclick="applyCodeToGraph()">🔄 Построить диаграмму из кода</button>
+      </div>
       <div class="panel-title">Предпросмотр</div>
       <div id="mermaid-preview-container">
         <div id="mermaid-preview" class="mermaid"></div>
@@ -179,6 +190,7 @@
     let isDarkTheme = false;
     let currentScale = 1;
     let selectedCells = [];
+    let isSyncing = false; // Флаг для предотвращения зацикливания парсинга
 
     mermaid.initialize({ startOnLoad: false, theme: 'default' });
 
@@ -208,6 +220,8 @@
       width: 3000, height: 3000,
       gridSize: 10, drawGrid: true, background: { color: 'transparent' },
       defaultLink: () => new joint.shapes.standard.Link({
+        router: { name: 'manhattan' }, // Ортогональные стрелки под 90 градусов
+        connector: { name: 'rounded' },
         attrs: {
           line: { stroke: isDarkTheme ? '#ffffff' : '#000000', strokeWidth: 2, targetMarker: { 'type': 'path', 'd': 'M 10 -5 0 0 10 5 Z', fill: isDarkTheme ? '#ffffff' : '#000000', stroke: 'none' } }
         },
@@ -339,7 +353,7 @@
         if (view) {
           view.$el.addClass('selected');
           
-          // Включаем инструменты для стрелок (точки изгиба, удаление)
+          // Включаем инструменты для стрелок (точки изгиба, сегменты, удаление)
           if (cell.isLink()) {
              const tools = new joint.dia.ToolsView({
                 tools: [
@@ -497,6 +511,7 @@
       });
 
       graph.getLinks().forEach(link => {
+        link.router('manhattan');
         link.attr('line/stroke', lColor);
         link.attr('line/targetMarker/fill', lColor);
         link.label(0, { attrs: { text: { fill: tColor } } });
@@ -526,7 +541,7 @@
         id: "root",
         layoutOptions: {
           'elk.algorithm': 'layered',
-          'elk.direction': 'RIGHT', // Сверху вниз
+          'elk.direction': 'RIGHT', // Слева направо
           'elk.spacing.nodeNode': '60', // Отступы между узлами
           'elk.layered.spacing.nodeNodeBetweenLayers': '70' // Отступы между слоями
         },
@@ -556,6 +571,9 @@
     }
 
     function updateMermaid() {
+      if (isSyncing) return;
+      isSyncing = true;
+
       const elements = graph.getElements();
       const links = graph.getLinks();
       let code = 'graph TD\n';
@@ -592,14 +610,167 @@
       previewContainer.innerHTML = `<div id="mermaid-preview" class="mermaid">${code}</div>`;
       
       try { mermaid.contentLoaded(); } catch(e) {}
+      
+      isSyncing = false;
     }
+
+    // --- ПАРСИНГ KОДА С MERMAID В ДИАГРАММУ ---
+    function parseMermaidToGraph(code) {
+      if (isSyncing) return;
+      isSyncing = true;
+
+      try {
+        const lines = code.split('\n');
+        const existingElements = {};
+        graph.getElements().forEach(el => {
+          const key = el.id.replace(/-/g, '_');
+          existingElements[key] = el;
+        });
+
+        const parsedNodes = new Map();
+        const parsedLinks = [];
+
+        lines.forEach(line => {
+          let l = line.trim();
+          if (!l || l.startsWith('graph') || l.startsWith('flowchart') || l.startsWith('%%')) return;
+
+          // Определение фигур элементов
+          const nodeDefs = l.match(/([a-zA-Z0-9_]+)\s*(\(\(\s*"?(.*?)"?\s*\)\)|\{\s*"?(.*?)"?\s*\}|\(\s*"?(.*?)"?\s*\)|\[\s*"?(.*?)"?\s*\])/g);
+          if (nodeDefs) {
+            nodeDefs.forEach(def => {
+              let m;
+              if ((m = def.match(/([a-zA-Z0-9_]+)\s*\(\(\s*"?(.*?)"?\s*\)\)/))) {
+                parsedNodes.set(m[1], { text: m[2], shape: 'circle' });
+              } else if ((m = def.match(/([a-zA-Z0-9_]+)\s*\{\s*"?(.*?)"?\s*\}/))) {
+                parsedNodes.set(m[1], { text: m[2], shape: 'rhombus' });
+              } else if ((m = def.match(/([a-zA-Z0-9_]+)\s*\(\s*"?(.*?)"?\s*\)/))) {
+                parsedNodes.set(m[1], { text: m[2], shape: 'rounded' });
+              } else if ((m = def.match(/([a-zA-Z0-9_]+)\s*\[\s*"?(.*?)"?\s*\]/))) {
+                parsedNodes.set(m[1], { text: m[2], shape: 'rect' });
+              }
+            });
+          }
+
+          // Определение связей (стрелок)
+          const linkMatch = l.match(/([a-zA-Z0-9_]+)\s*(?:--\s*"?(.*?)"?\s*-->|-->\|(.*?)\|-->|-->)\s*([a-zA-Z0-9_]+)/);
+          if (linkMatch) {
+            const src = linkMatch[1];
+            const label = linkMatch[2] || linkMatch[3] || '';
+            const tgt = linkMatch[4];
+            if (src && tgt && src !== 'graph' && src !== 'flowchart') {
+              parsedLinks.push({ source: src, target: tgt, text: label });
+              if (!parsedNodes.has(src)) parsedNodes.set(src, { text: src, shape: 'rect' });
+              if (!parsedNodes.has(tgt)) parsedNodes.set(tgt, { text: tgt, shape: 'rect' });
+            }
+          }
+        });
+
+        if (parsedNodes.size === 0 && parsedLinks.length === 0) {
+          isSyncing = false;
+          return;
+        }
+
+        graph.clear();
+        const createdNodes = new Map();
+
+        let startX = 100, startY = 100;
+        let idx = 0;
+
+        parsedNodes.forEach((data, id) => {
+          let x = startX + (idx % 4) * 160;
+          let y = startY + Math.floor(idx / 4) * 120;
+
+          // Сохраняем позицию, если узел уже существовал
+          if (existingElements[id]) {
+            const pos = existingElements[id].position();
+            x = pos.x;
+            y = pos.y;
+          }
+
+          const node = createNode(data.shape, x, y, data.text);
+          createdNodes.set(id, node);
+          idx++;
+        });
+
+        parsedLinks.forEach(linkData => {
+          const srcNode = createdNodes.get(linkData.source);
+          const tgtNode = createdNodes.get(linkData.target);
+          if (srcNode && tgtNode) {
+            const link = new joint.shapes.standard.Link({
+              source: { id: srcNode.id, port: 'bottom' },
+              target: { id: tgtNode.id, port: 'top' },
+              router: { name: 'manhattan' }, // Стрелки 90 градусов
+              connector: { name: 'rounded' },
+              attrs: {
+                line: {
+                  stroke: isDarkTheme ? '#ffffff' : '#000000',
+                  strokeWidth: 2,
+                  targetMarker: { 'type': 'path', 'd': 'M 10 -5 0 0 10 5 Z', fill: isDarkTheme ? '#ffffff' : '#000000', stroke: 'none' }
+                }
+              }
+            });
+            if (linkData.text) {
+              link.label(0, { attrs: { text: { text: linkData.text, fill: isDarkTheme ? '#ffffff' : '#000000' } } });
+            }
+            link.addTo(graph);
+          }
+        });
+
+        // Обновляем предпросмотр
+        const previewContainer = document.getElementById('mermaid-preview-container');
+        previewContainer.innerHTML = `<div id="mermaid-preview" class="mermaid">${code}</div>`;
+        try { mermaid.contentLoaded(); } catch(e) {}
+
+      } catch(e) {
+        console.error('Ошибка парсинга Mermaid:', e);
+      } finally {
+        isSyncing = false;
+      }
+    }
+
+    function applyCodeToGraph() {
+      const code = document.getElementById('mermaid-code').value;
+      parseMermaidToGraph(code);
+    }
+
+    function copyMermaidCode() {
+      const code = document.getElementById('mermaid-code').value;
+      navigator.clipboard.writeText(code).then(() => {
+        alert('Код скопирован в буфер обмена!');
+      }).catch(err => {
+        console.error('Ошибка копирования:', err);
+      });
+    }
+
+    function downloadMermaidCode() {
+      const code = document.getElementById('mermaid-code').value;
+      const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'diagram.mmd';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Слушатель редактирования кода в текстовом поле
+    document.getElementById('mermaid-code').addEventListener('input', _.debounce(function(e) {
+      parseMermaidToGraph(e.target.value);
+    }, 600));
 
     graph.on('add change remove', _.debounce(updateMermaid, 200));
 
     // Стартовый пример
     const n1 = createNode('circle', 200, 80, 'Начало');
     const n2 = createNode('rect', 200, 220, 'Обработка');
-    const initialLink = new joint.shapes.standard.Link({ source: { id: n1.id, port: 'bottom' }, target: { id: n2.id, port: 'top' } });
+    const initialLink = new joint.shapes.standard.Link({
+      source: { id: n1.id, port: 'bottom' },
+      target: { id: n2.id, port: 'top' },
+      router: { name: 'manhattan' },
+      connector: { name: 'rounded' }
+    });
     initialLink.addTo(graph);
 
   </script>
