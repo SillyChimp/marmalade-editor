@@ -15,46 +15,104 @@
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
-    body { display: flex; height: 100vh; overflow: hidden; background: #f0f2f5; color: #333; }
+    :root {
+      --bg-body: #f0f2f5;
+      --bg-panel: #ffffff;
+      --bg-canvas: #fafafa;
+      --text-color: #333333;
+      --border-color: #dddddd;
+      --code-bg: #282c34;
+      --code-color: #abb2bf;
+      --grid-color: #dddddd;
+    }
+
+    body.dark {
+      --bg-body: #1a1a1a;
+      --bg-panel: #252526;
+      --bg-canvas: #1e1e1e;
+      --text-color: #cccccc;
+      --border-color: #3e3e42;
+      --code-bg: #141414;
+      --code-color: #9cdcfe;
+      --grid-color: #333333;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { display: flex; height: 100vh; overflow: hidden; background: var(--bg-body); color: var(--text-color); transition: background 0.3s, color 0.3s; }
 
     /* Панель инструментов (слева) */
-    #toolbar { width: 220px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; padding: 10px; z-index: 10; }
-    .toolbar-header { font-weight: bold; margin-bottom: 15px; color: #0066cc; font-size: 1.1em; text-align: center;}
-    .tool-item {
-      background: #f9f9f9; border: 1px solid #ccc; border-radius: 6px;
-      padding: 10px; margin-bottom: 10px; cursor: grab;
-      text-align: center; user-select: none; transition: background 0.2s;
+    #toolbar { 
+      width: 240px; background: var(--bg-panel); border-right: 1px solid var(--border-color); 
+      display: flex; flex-direction: column; padding: 12px; z-index: 10; transition: margin-left 0.3s, width 0.3s; 
     }
-    .tool-item:hover { background: #e0f0ff; border-color: #0066cc; }
-    .tool-desc { font-size: 12px; color: #666; margin-top: 4px; }
+    #toolbar.collapsed { margin-left: -240px; }
+
+    .toolbar-header { font-weight: bold; margin-bottom: 12px; color: #0066cc; font-size: 1.1em; text-align: center; }
+    body.dark .toolbar-header { color: #4da6ff; }
+
+    .tool-item {
+      background: var(--bg-body); border: 1px solid var(--border-color); border-radius: 6px;
+      padding: 10px; margin-bottom: 10px; cursor: grab; text-align: center; user-select: none; transition: all 0.2s;
+    }
+    .tool-item:hover { background: #0066cc; color: #fff; border-color: #0066cc; }
+    .tool-desc { font-size: 11px; opacity: 0.7; margin-top: 4px; }
     
-    .btn-clear { margin-top: auto; padding: 10px; background: #cc0000; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    .theme-toggle {
+      margin-top: auto; padding: 8px; background: var(--bg-body); color: var(--text-color);
+      border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; margin-bottom: 8px;
+    }
+    .btn-clear { padding: 10px; background: #cc0000; color: white; border: none; border-radius: 4px; cursor: pointer; }
     .btn-clear:hover { background: #990000; }
 
     /* Холст (центр) */
-    #canvas-container { flex: 1; position: relative; overflow: auto; background: #fafafa; background-image: radial-gradient(#ddd 1px, transparent 1px); background-size: 20px 20px;}
+    #canvas-container { flex: 1; position: relative; overflow: auto; background: var(--bg-canvas); }
     #paper { cursor: default; }
 
-    /* Панель Mermaid (справа) */
-    #sidebar { width: 400px; display: flex; flex-direction: column; background: #fff; border-left: 1px solid #ddd; z-index: 10; }
-    .panel-title { padding: 12px; font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #ddd; font-size: 14px; }
-    #mermaid-code { 
-        height: 250px; padding: 10px; font-family: monospace; font-size: 13px; 
-        border: none; border-bottom: 1px solid #ddd; resize: vertical; 
-        background: #282c34; color: #abb2bf;
+    /* Плавающие кнопки управления холстом */
+    .canvas-overlay-btn {
+      position: absolute; z-index: 20; background: var(--bg-panel); border: 1px solid var(--border-color);
+      color: var(--text-color); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15); user-select: none;
     }
-    #mermaid-preview-container { flex: 1; overflow: auto; padding: 10px; background: #fff; display: flex; justify-content: center; align-items: flex-start; }
+    .canvas-overlay-btn:hover { background: var(--border-color); }
+
+    #toggle-left { top: 12px; left: 12px; }
+    #toggle-right { top: 12px; right: 12px; }
+
+    #zoom-controls {
+      position: absolute; bottom: 16px; left: 16px; z-index: 20; display: flex; gap: 4px;
+      background: var(--bg-panel); padding: 4px; border: 1px solid var(--border-color); border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    #zoom-controls button {
+      padding: 6px 10px; background: var(--bg-body); border: 1px solid var(--border-color);
+      color: var(--text-color); border-radius: 4px; cursor: pointer;
+    }
+    #zoom-controls span { padding: 6px 8px; font-size: 12px; display: flex; align-items: center; }
+
+    /* Панель Mermaid (справа) */
+    #sidebar { 
+      width: 400px; display: flex; flex-direction: column; background: var(--bg-panel); 
+      border-left: 1px solid var(--border-color); z-index: 10; transition: margin-right 0.3s, width 0.3s; 
+    }
+    #sidebar.collapsed { margin-right: -400px; }
+
+    .panel-title { padding: 12px; font-weight: bold; background: var(--bg-body); border-bottom: 1px solid var(--border-color); font-size: 13px; }
+    #mermaid-code { 
+      height: 220px; padding: 10px; font-family: monospace; font-size: 12px; 
+      border: none; border-bottom: 1px solid var(--border-color); resize: vertical; 
+      background: var(--code-bg); color: var(--code-color);
+    }
+    #mermaid-preview-container { flex: 1; overflow: auto; padding: 10px; background: var(--bg-panel); display: flex; justify-content: center; align-items: flex-start; }
     
-    /* Инструкция */
-    .instruction { font-size: 12px; padding: 10px; background: #e9ecef; border-bottom: 1px solid #ddd; }
+    .instruction { font-size: 12px; padding: 10px; background: var(--bg-body); border-bottom: 1px solid var(--border-color); line-height: 1.4; }
   </style>
 </head>
 <body>
 
-  <!-- Левая панель: Формы -->
+  <!-- Левая панель -->
   <div id="toolbar">
-    <div class="toolbar-header">Элементы</div>
+    <div class="toolbar-header">Фигуры</div>
     
     <div class="tool-item" draggable="true" data-type="rect">
       Прямоугольник
@@ -76,96 +134,104 @@
       <div class="tool-desc">((Начало/Конец))</div>
     </div>
 
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 Переключить тему</button>
     <button class="btn-clear" onclick="graph.clear()">Очистить холст</button>
   </div>
 
-  <!-- Центральная панель: Холст -->
+  <!-- Центр: Холст -->
   <div id="canvas-container">
+    <button id="toggle-left" class="canvas-overlay-btn" onclick="toggleSidebar('left')">◀ Панель</button>
+    <button id="toggle-right" class="canvas-overlay-btn" onclick="toggleSidebar('right')">Код ▶</button>
+
+    <div id="zoom-controls">
+      <button onclick="changeZoom(-0.1)">-</button>
+      <span id="zoom-val">100%</span>
+      <button onclick="changeZoom(0.1)">+</button>
+      <button onclick="resetZoom()">100%</button>
+    </div>
+
     <div id="paper"></div>
   </div>
 
-  <!-- Правая панель: Код -->
+  <!-- Правая панель -->
   <div id="sidebar">
     <div class="instruction">
-      <strong>Как использовать:</strong><br>
-      1. Перетащите элементы слева на холст.<br>
-      2. Тяните за маленькие синие точки на узлах, чтобы создать связь.<br>
-      3. Двойной клик по тексту узла или связи, чтобы изменить его.
+      <strong>Как связывать элементы:</strong><br>
+      Наведите на узел — появятся 4 синие точки. Потяните мышь из точки к другому узлу, чтобы создать стрелку.<br>
+      <em>Двойной клик по тексту узла или стрелки — редактировать текст.</em>
     </div>
     <div class="panel-title">Код Mermaid (graph TD)</div>
     <textarea id="mermaid-code" readonly></textarea>
-    <div class="panel-title">Mermaid Render (Проверка)</div>
+    <div class="panel-title">Предпросмотр</div>
     <div id="mermaid-preview-container">
       <div id="mermaid-preview" class="mermaid"></div>
     </div>
   </div>
 
   <script>
+    let isDarkTheme = false;
+    let currentScale = 1.0;
+
     mermaid.initialize({ startOnLoad: false, theme: 'default' });
 
-    // 1. Инициализация JointJS (Граф и Холст)
+    // 1. JointJS Граф и Холст
     const graph = new joint.dia.Graph();
     
     const paper = new joint.dia.Paper({
       el: document.getElementById('paper'),
       model: graph,
-      width: 2000,
-      height: 2000,
+      width: 3000,
+      height: 3000,
       gridSize: 10,
       drawGrid: true,
       background: { color: 'transparent' },
       
-      // Настройки соединений
-      defaultLink: new joint.shapes.standard.Link({
+      // Настройка стрелок и соединений
+      defaultLink: () => new joint.shapes.standard.Link({
         attrs: {
-          line: { stroke: '#333', strokeWidth: 2, targetMarker: { 'type': 'path', 'd': 'M 10 -5 0 0 10 5 Z' } }
+          line: { stroke: '#0066cc', strokeWidth: 2, targetMarker: { type: 'path', d: 'M 10 -5 0 0 10 5 Z' } }
         },
-        labels: [{ position: 0.5, attrs: { text: { text: '' } } }]
+        labels: [{ position: 0.5, attrs: { text: { text: '', fill: '#333' } } }]
       }),
-      linkPinning: false, // Связи должны быть привязаны к элементам
-      defaultConnectionPoint: { name: 'boundary' },
-      validateConnection: function(cellViewS, magnetS, cellViewT, magnetT, end, linkView) {
-        if (cellViewS === cellViewT) return false; // Нельзя связывать элемент сам с собой
-        return magnetT !== undefined; // Можно связывать только с элементами
-      },
+      linkPinning: false,
+      snapLinks: { radius: 25 },
+      magnetThreshold: 'onleave',
       
-      // Включаем "магниты" (точки для соединений)
-      interactive: { linkMove: true, elementMove: true }
+      validateConnection: function(cellViewS, magnetS, cellViewT, magnetT) {
+        if (cellViewS === cellViewT) return false;
+        return magnetT !== undefined;
+      }
     });
 
-    // 2. Фабрика создания элементов
+    // 2. Создание узла с 4 точками привязки (Ports)
     function createNode(type, x, y) {
       let element;
-      const text = 'Текст';
+      const text = 'Узел';
       
-      // Базовые стили узла
       const baseAttrs = {
         body: { fill: '#ffffff', stroke: '#0066cc', strokeWidth: 2 },
-        text: { text: text, fill: '#333', fontSize: 14, fontWeight: 'bold' }
+        text: { text: text, fill: '#333333', fontSize: 13, fontWeight: 'bold' }
       };
 
-      // Магниты (порты для связей)
-      const portAttrs = {
-        magnet: true,
-        fill: '#0066cc',
-        r: 5,
-        opacity: 0.3 // Скрыты, пока не наведешь мышь (настраивается в CSS/JS)
-      };
+      if (isDarkTheme) {
+        baseAttrs.body.fill = '#2d2d2d';
+        baseAttrs.body.stroke = '#4da6ff';
+        baseAttrs.text.fill = '#ffffff';
+      }
 
       switch(type) {
         case 'rect':
           element = new joint.shapes.standard.Rectangle();
-          element.resize(100, 40);
-          baseAttrs.body.rx = 0; baseAttrs.body.ry = 0;
+          element.resize(110, 45);
           break;
         case 'rounded':
           element = new joint.shapes.standard.Rectangle();
-          element.resize(100, 40);
-          baseAttrs.body.rx = 10; baseAttrs.body.ry = 10;
+          element.resize(110, 45);
+          baseAttrs.body.rx = 12; baseAttrs.body.ry = 12;
           break;
         case 'rhombus':
           element = new joint.shapes.standard.Polygon();
-          element.resize(80, 80);
+          element.resize(85, 85);
           baseAttrs.body.refPoints = '0,10 10,0 20,10 10,20';
           break;
         case 'circle':
@@ -176,106 +242,162 @@
 
       element.position(x, y);
       element.attr(baseAttrs);
-      
-      // Добавляем атрибут для типа формы, чтобы знать, как рендерить в Mermaid
       element.set('mermaidShape', type);
+
+      // Конфигурация 4 портов связи (Сверху, Справа, Снизу, Слева)
+      const portAttrs = {
+        circle: { r: 5, magnet: true, fill: '#0066cc', stroke: '#ffffff', strokeWidth: 1.5, cursor: 'crosshair' }
+      };
+
+      element.prop('ports', {
+        groups: {
+          'top': { position: 'top', attrs: portAttrs },
+          'right': { position: 'right', attrs: portAttrs },
+          'bottom': { position: 'bottom', attrs: portAttrs },
+          'left': { position: 'left', attrs: portAttrs }
+        },
+        items: [
+          { group: 'top' },
+          { group: 'right' },
+          { group: 'bottom' },
+          { group: 'left' }
+        ]
+      });
+
       element.addTo(graph);
       return element;
     }
 
-    // 3. Drag and Drop с панели инструментов
+    // 3. Drag and Drop с панели элементов
     const canvasContainer = document.getElementById('canvas-container');
     let draggedType = null;
 
     document.querySelectorAll('.tool-item').forEach(item => {
       item.addEventListener('dragstart', (e) => {
         draggedType = e.target.getAttribute('data-type');
-        e.dataTransfer.setData('text/plain', ''); // Firefox fix
+        e.dataTransfer.setData('text/plain', '');
       });
     });
 
-    canvasContainer.addEventListener('dragover', (e) => {
-      e.preventDefault();
-    });
+    canvasContainer.addEventListener('dragover', (e) => e.preventDefault());
 
     canvasContainer.addEventListener('drop', (e) => {
       e.preventDefault();
       if (!draggedType) return;
       
       const rect = canvasContainer.getBoundingClientRect();
-      const x = e.clientX - rect.left + canvasContainer.scrollLeft - 50;
-      const y = e.clientY - rect.top + canvasContainer.scrollTop - 20;
+      const x = (e.clientX - rect.left + canvasContainer.scrollLeft) / currentScale - 50;
+      const y = (e.clientY - rect.top + canvasContainer.scrollTop) / currentScale - 20;
       
       createNode(draggedType, x, y);
       draggedType = null;
     });
 
-    // 4. Редактирование текста двойным кликом
-    paper.on('cell:pointerdblclick', function(cellView, e) {
+    // 4. Двойной клик по тексту
+    paper.on('cell:pointerdblclick', function(cellView) {
       const cell = cellView.model;
       const isLink = cell.isLink();
       
-      let currentText = '';
-      if (isLink) {
-        const labels = cell.labels();
-        currentText = labels.length > 0 ? labels[0].attrs.text.text : '';
-      } else {
-        currentText = cell.attr('text/text');
-      }
+      let currentText = isLink 
+        ? (cell.labels().length > 0 ? cell.labels()[0].attrs.text.text : '')
+        : cell.attr('text/text');
 
-      const newText = prompt('Введите текст:', currentText);
+      const newText = prompt('Введите текст узла или связи:', currentText);
       if (newText !== null) {
         if (isLink) {
-          cell.label(0, { attrs: { text: { text: newText } } });
+          cell.label(0, { attrs: { text: { text: newText, fill: isDarkTheme ? '#fff' : '#333' } } });
         } else {
           cell.attr('text/text', newText);
         }
       }
     });
 
-    // 5. Генерация Mermaid кода
+    // 5. Масштабирование (Zoom)
+    function changeZoom(delta) {
+      currentScale = Math.max(0.3, Math.min(2.5, currentScale + delta));
+      paper.scale(currentScale, currentScale);
+      document.getElementById('zoom-val').innerText = Math.round(currentScale * 100) + '%';
+    }
+
+    function resetZoom() {
+      currentScale = 1.0;
+      paper.scale(1, 1);
+      document.getElementById('zoom-val').innerText = '100%';
+    }
+
+    canvasContainer.addEventListener('wheel', (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        changeZoom(e.deltaY < 0 ? 0.1 : -0.1);
+      }
+    }, { passive: false });
+
+    // 6. Скрытие боковых панелей
+    function toggleSidebar(side) {
+      if (side === 'left') {
+        const tb = document.getElementById('toolbar');
+        const btn = document.getElementById('toggle-left');
+        tb.classList.toggle('collapsed');
+        btn.innerText = tb.classList.contains('collapsed') ? 'Панель ▶' : '◀ Панель';
+      } else {
+        const sb = document.getElementById('sidebar');
+        const btn = document.getElementById('toggle-right');
+        sb.classList.toggle('collapsed');
+        btn.innerText = sb.classList.contains('collapsed') ? '◀ Код' : 'Код ▶';
+      }
+    }
+
+    // 7. Переключение темы
+    function toggleTheme() {
+      isDarkTheme = !isDarkTheme;
+      document.body.classList.toggle('dark', isDarkTheme);
+      
+      // Обновляем цвета существующих узлов
+      graph.getElements().forEach(el => {
+        el.attr('body/fill', isDarkTheme ? '#2d2d2d' : '#ffffff');
+        el.attr('body/stroke', isDarkTheme ? '#4da6ff' : '#0066cc');
+        el.attr('text/fill', isDarkTheme ? '#ffffff' : '#333333');
+      });
+
+      mermaid.initialize({ startOnLoad: false, theme: isDarkTheme ? 'dark' : 'default' });
+      updateMermaid();
+    }
+
+    // 8. Генератор Mermaid кода
     function updateMermaid() {
       const elements = graph.getElements();
       const links = graph.getLinks();
       
       let code = 'graph TD\n';
 
-      // 5.1 Генерация узлов
       elements.forEach(el => {
-        const id = el.id.replace(/-/g, '_'); // Mermaid не любит дефисы
+        const id = el.id.replace(/-/g, '_');
         const text = el.attr('text/text').replace(/"/g, "'");
         const shape = el.get('mermaidShape');
         
-        let mermaidNode = '';
-        if (shape === 'rect') mermaidNode = `${id}["${text}"]`;
-        else if (shape === 'rounded') mermaidNode = `${id}("${text}")`;
-        else if (shape === 'rhombus') mermaidNode = `${id}{"${text}"}`;
-        else if (shape === 'circle') mermaidNode = `${id}(("${text}"))`;
+        let nodeStr = `${id}["${text}"]`;
+        if (shape === 'rounded') nodeStr = `${id}("${text}")`;
+        else if (shape === 'rhombus') nodeStr = `${id}{"${text}"}`;
+        else if (shape === 'circle') nodeStr = `${id}(("${text}"))`;
         
-        code += `    ${mermaidNode}\n`;
+        code += `    ${nodeStr}\n`;
       });
 
-      // 5.2 Генерация связей
       links.forEach(link => {
         const sourceId = link.get('source').id;
         const targetId = link.get('target').id;
         
-        if (sourceId && targetId) { // Если связь завершена
+        if (sourceId && targetId) {
           const sId = sourceId.replace(/-/g, '_');
           const tId = targetId.replace(/-/g, '_');
-          
           const labels = link.labels();
-          const linkText = labels.length > 0 && labels[0].attrs.text.text ? labels[0].attrs.text.text : '';
+          const linkText = labels.length > 0 ? labels[0].attrs.text.text : '';
           
-          if (linkText) {
-            code += `    ${sId} -- "${linkText}" --> ${tId}\n`;
-          } else {
-            code += `    ${sId} --> ${tId}\n`;
-          }
+          if (linkText) code += `    ${sId} -- "${linkText}" --> ${tId}\n`;
+          else code += `    ${sId} --> ${tId}\n`;
         }
       });
 
-      // 5.3 Вывод и рендер
       document.getElementById('mermaid-code').value = code;
       
       const previewContainer = document.getElementById('mermaid-preview-container');
@@ -283,22 +405,23 @@
       
       try {
         mermaid.contentLoaded();
-      } catch(e) {
-        console.warn("Ошибка рендера Mermaid (возможно граф пуст или неполный):", e);
-      }
+      } catch(e) {}
     }
 
-    // Слушаем изменения в графе
-    graph.on('add change remove', _.debounce(updateMermaid, 300));
+    graph.on('add change remove', _.debounce(updateMermaid, 250));
 
-    // Добавляем тестовые узлы при загрузке
-    const n1 = createNode('circle', 100, 50);
+    // Стартовые узлы
+    const n1 = createNode('circle', 120, 60);
     n1.attr('text/text', 'Начало');
-    const n2 = createNode('rect', 100, 150);
-    n2.attr('text/text', 'Действие');
-    
-    const l1 = new joint.shapes.standard.Link({ source: { id: n1.id }, target: { id: n2.id } });
-    l1.addTo(graph);
+    const n2 = createNode('rect', 120, 180);
+    n2.attr('text/text', 'Процесс');
+
+    const startLink = new joint.shapes.standard.Link({
+      source: { id: n1.id, port: n1.getPorts()[2].id }, // Привязка к нижнему порту
+      target: { id: n2.id, port: n2.getPorts()[0].id }  // Привязка к верхнему порту
+    });
+    startLink.attr('line/stroke', '#0066cc');
+    startLink.addTo(graph);
 
   </script>
 </body>
